@@ -1,285 +1,122 @@
-/*******************************************
+#define autoManualSwitch PORTB.RB0
+#define manualSwitch PORTB.RB1
+#define enableUnits PORTB.RB2
+#define enableTens PORTB.RB3
+#define westRedLed PORTD.RD0
+#define westYellowLed PORTD.RD1
+#define westGreenLed PORTD.RD2
+#define southRedLed PORTD.RD3
+#define southYellowLed PORTD.RD4
+#define southGreenLed PORTD.RD5
 
- * Project_Name: Traffic_Light_Controller.c
-
- * Description : To design and implement a traffic light controller system using a PIC16F877A microcontroller that operates in two modes: automatic and manual.
-
- * Author      : Abdelhady Muhammad
-
- * B.N         : 36
-
- ******************************************/
-
-// Define switches pin configurations
-
-#define AUTO_MANUAL_SWITCH PORTB.RB0
-
-#define MANUAL_SWITCH PORTB.RB1
-
-// Define west traffic pin configurations
-
-#define WEST_RED_LIGHT PORTD.RD0
-
-#define WEST_YELLOW_LIGHT PORTD.RD1
-
-#define WEST_GREEN_LIGHT PORTD.RD2
-
-// Define south traffic pin configurations
-
-#define SOUTH_RED_LIGHT PORTD.RD3
-
-#define SOUTH_YELLOW_LIGHT PORTD.RD4
-
-#define SOUTH_GREEN_LIGHT PORTD.RD5
-
-// Define west Time Constants in ms
-
-#define WEST_RED_TIME 15
-
-#define WEST_YELLOW_TIME 3
-
-#define WEST_GREEN_TIME 20
-
-// Define south Time Constants in ms
-
-#define SOUTH_RED_TIME 23
-
-#define SOUTH_YELLOW_TIME 3
-
-#define SOUTH_GREEN_TIME 12
-
-// Define displays enables
-
-#define UNITS_ENABLE PORTB.RB2
-#define TENS_ENABLE PORTB.RB3
-
-unsigned char current_mode = 0;
-
-unsigned char i;
-
-/*** INTERRUPT Configurations setup ***/
-
-void configureINT0(){
-
-        // Enable global interrupts
-
-    INTCON.GIE = 1;
-
-    // RB0/INT External interrupt enable
-
-    INTCON.INTE = 1;
-
-    // clear INT0 interrupt flag
-
-    INTCON.INTF = 0;
-
-    // Interrupt on rising edge
-
-    OPTION_REG.INTEDG = 1;
-
-}
-
-/*** I/O port configurations setup ***/
-
-void initialize() {
-
-    //set RB0 and RB1 as input for switches
-
-    TRISB = 0x03;
-
-    //set PORTC as output for SOUTH 7-Segment displays
-
-    TRISC = 0x00;
-
-    //set PORTD as output for LEDs
-
-    TRISD = 0x00;
-
-    //Initialize PORTC with all SOUTH 7-Segment displays off
-
-    PORTC = 0x00;
-
-    //initialize PORTD with all LEDs off
-
-    PORTD = 0x00;
-
-    // initialize enables
-    UNITS_ENABLE = 1;
-    TENS_ENABLE = 1;
-}
-
-/*** Auto/Manual switch interrupt ***/
+char current_mode = 0;
+char i;
 
 void interrupt() {
-
-    /*** check INT0 interrupt ***/
-
     if (INTCON.INTF) {
-          Delay_ms(30)  ;
-        // clear INT0 interrupt flag
-
-        INTCON.INTF = 0;
-
-        // Toggle between AUTOMATIC and MANUAL modes
-
-        current_mode = (current_mode == 0?1 :0);
-
+        Delay_ms(30); // Debounce delay
+        INTCON.INTF = 0; // Clear the interrupt flag
+        current_mode = (current_mode == 0 ? 1 : 0); // Toggle mode
     }
-
 }
 
-void display(unsigned char seconds) {
+void setCounter(char seconds) {
+    char units = seconds % 10;
+    char tens = seconds / 10;
 
-    unsigned char tens = seconds / 10;
-
-    unsigned char units = seconds % 10;
-
-    // display on the 7-Segment
-    if (seconds == 0 ){
-       UNITS_ENABLE = 0;
-       TENS_ENABLE = 0;
+    if (seconds == 0) {
+        enableUnits = 0;
+        enableTens = 0;
     } else {
-       if (seconds < 10){
-       UNITS_ENABLE = 1;
-       TENS_ENABLE = 0;
-       } else {
-       UNITS_ENABLE = 1;
-       TENS_ENABLE = 1;
-       }
+        enableUnits = (seconds < 10) ? 1 : 1;
+        enableTens = (seconds >= 10) ? 1 : 0;
     }
     PORTC = (units & 0x0F) | ((tens & 0x0F) << 4);
-
 }
 
-int main() {
+void main() {
+    // Initialize ports
+    TRISB = 0x03; // RB0, RB1 as inputs (switches), others as outputs
+    TRISC = 0x00; // PORTC as output (7-segment display)
+    TRISD = 0x00; // PORTD as output (LEDs)
+    PORTC = 0x00; // Clear PORTC
+    PORTD = 0x00; // Clear PORTD
+    enableUnits = 1;
+    enableTens = 1;
 
-    initialize();
+    // Configure interrupts
+    INTCON.GIE = 1; // Enable global interrupts
+    INTCON.INTE = 1; // Enable INT external interrupt
+    INTCON.INTF = 0; // Clear the interrupt flag
+    OPTION_REG.INTEDG = 1; // Interrupt on rising edge
 
-    configureINT0();
+    while (1) {
+        if (!current_mode) { // Automatic mode
+            // Reset all LEDs
+            southGreenLed = 0;
+            southRedLed = 0;
+            southYellowLed = 0;
+            westGreenLed = 0;
+            westYellowLed = 0;
+            westRedLed = 1; // West street red light
 
-        while (1) {
+            // West street green/yellow timing
+            for (i = 15; i > 0 && !current_mode; i--) {
+                southGreenLed = (i > 3 ? 1 : 0);
+                southYellowLed = (i <= 3 ? 1 : 0);
+                setCounter(i);
+                Delay_ms(1000); // Wait 1 second
+            }
 
-                /*** AUTOMATIC MODE ***/
+            westRedLed = 0;
+            southYellowLed = 0;
+            southRedLed = 1; // South street red light
 
-                if(!current_mode){
-
-                        WEST_RED_LIGHT = 1;
-
-                        for (i = WEST_RED_TIME; i > 0 && !current_mode; i--) {
-
-                                SOUTH_GREEN_LIGHT = (i > 3 ? 1 : 0);
-
-                                SOUTH_YELLOW_LIGHT = (i <= 3 ? 1 : 0);
-
-                                display(i);
-
-                                Delay_ms(1000);
-
-                        }
-
-                        WEST_RED_LIGHT = 0;
-
-                        SOUTH_YELLOW_LIGHT = 0;
-
-                        SOUTH_RED_LIGHT = 1;
-
-                        for (i = SOUTH_RED_TIME; i > 0 && !current_mode; i--) {
-
-                                WEST_GREEN_LIGHT = (i > 3 ? 1 : 0);
-
-                                WEST_YELLOW_LIGHT = (i <= 3 ? 1 : 0);
-
-                                display(i);
-
-                                Delay_ms(1000);
-
-                        }
-
-                        SOUTH_RED_LIGHT = 0;
-
-                        WEST_YELLOW_LIGHT = 0;
-
+            // South street green/yellow timing
+            for (i = 23; i > 0 && !current_mode; i--) {
+                westGreenLed = (i > 3 ? 1 : 0);
+                westYellowLed = (i <= 3 ? 1 : 0);
+                setCounter(i);
+                Delay_ms(1000); // Wait 1 second
+            }
+            southRedLed = 0;
+            westYellowLed = 0;
+        } else { // Manual mode
+            if (westRedLed) { // If West street is in red light
+                for (i = 3; i > 0 && current_mode; i--) {
+                    southYellowLed = 1;
+                    southGreenLed = 0;
+                    setCounter(i);
+                    Delay_ms(1000); // Wait 1 second
                 }
-
-                /*** MANUAL MODE ***/
-
-                else {
-
-                        if (WEST_RED_LIGHT) {
-
-                                for(i = SOUTH_YELLOW_TIME; i > 0 && current_mode; i--) {
-
-                                        SOUTH_YELLOW_LIGHT = 1;
-
-                                        SOUTH_GREEN_LIGHT = 0;
-
-                                        display(i);
-
-                                        Delay_ms(1000);
-
-                                }
-
-                                while(current_mode && MANUAL_SWITCH ==1) {
-
-                                        WEST_RED_LIGHT = 0;
-
-                                        WEST_YELLOW_LIGHT = 0;
-
-                                        WEST_GREEN_LIGHT = 1;
-
-                                        SOUTH_RED_LIGHT = 1;
-
-                                        SOUTH_YELLOW_LIGHT = 0;
-
-                                        SOUTH_GREEN_LIGHT = 0;
-
-                                        display(0);
-
-                                        Delay_ms(50);
-
-                                }
-
-                        } else {
-
-                                for(i = WEST_YELLOW_TIME; i > 0 && current_mode; i--) {
-
-                                        WEST_YELLOW_LIGHT = 1;
-
-                                        WEST_GREEN_LIGHT = 0;
-
-                                        display(i);
-
-                                        Delay_ms(1000);
-
-
-
-                                }
-
-
-                                while(current_mode && MANUAL_SWITCH == 1) {
-
-                                        WEST_RED_LIGHT = 1;
-
-                                        WEST_YELLOW_LIGHT = 0;
-
-                                        WEST_GREEN_LIGHT = 0;
-
-                                        SOUTH_RED_LIGHT = 0;
-
-                                        SOUTH_YELLOW_LIGHT = 0;
-
-                                        SOUTH_GREEN_LIGHT = 1;
-
-                                        display(0);
-
-                                        Delay_ms(50);
-
-                                }
-
-                        }
-
+                while (current_mode && manualSwitch == 1) {
+                    westRedLed = 0;
+                    westYellowLed = 0;
+                    westGreenLed = 1;
+                    southRedLed = 1;
+                    southYellowLed = 0;
+                    southGreenLed = 0;
+                    setCounter(0);
+                    Delay_ms(50); // Short delay to reflect manual switch state
                 }
-
+            } else { // If West street is in yellow light
+                for (i = 3; i > 0 && current_mode; i--) {
+                    westYellowLed = 1;
+                    westGreenLed = 0;
+                    setCounter(i);
+                    Delay_ms(1000); // Wait 1 second
+                }
+                while (current_mode && manualSwitch == 1) {
+                    westRedLed = 1;
+                    westYellowLed = 0;
+                    westGreenLed = 0;
+                    southRedLed = 0;
+                    southYellowLed = 0;
+                    southGreenLed = 1;
+                    setCounter(0);
+                    Delay_ms(50); // Short delay to reflect manual switch state
+                }
+            }
         }
-
+    }
 }

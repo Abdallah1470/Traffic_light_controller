@@ -316,7 +316,6 @@ cmif
 cmif_bit
 comfrem
 compare_double
-configureint0
 cos
 cose3
 cosh
@@ -366,7 +365,6 @@ delay_5ms
 delay_80us
 delay_8ms
 delay_cyc
-display
 div
 div_16x16_s
 div_16x16_s_l
@@ -500,7 +498,6 @@ ibov_trise_bit
 ics_auto
 ics_off
 indf
-initialize
 int2double
 intcon
 inte
@@ -875,6 +872,7 @@ s1d13700_write_text_return_pos
 sdiv3232l
 sen
 sen_bit
+setcounter
 setfdz32
 setfov32
 setfun32
